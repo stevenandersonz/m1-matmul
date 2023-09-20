@@ -1,0 +1,45 @@
+---
+shape in attention for gpt2-medium:
+
+xq: (1, 16, 1, 64)
+keys: (1, 16, <(1+start_pos[1-128])>, 64)
+values: (1, 16, <(1+start_pos[1-128])>, 64)
+output: (1, 1, 1024)
+
+--
+it seem like jit or th kv cache avoids using previous tokens, find out exactly why?
+---
+kernel for simple macvec:
+
+__kernel void r_50257_16_16_256_4_4(__global float* data0, const __global float* data1, const __global float* data2, const __global float* data3) {
+int gidx0 = get_group_id(1);
+int gidx1 = get_group_id(0);
+int lidx2 = get_local_id(0);
+float4 acc0 = (float4)(0.0f,0.0f,0.0f,0.0f);
+for (int ridx0 = 0; ridx0 <= 255; ++ridx0) {
+  float4 val0 = (float4)(*((__global float4*)(data1+(gidx0*1024)+(ridx0*4))));
+  float4 val1 = (float4)(*((__global float4*)(data2+(gidx1*64)+(lidx2*4)+(ridx0*4096))));
+  float4 val2 = (float4)(*((__global float4*)(data2+(gidx1*64)+(lidx2*4)+(ridx0*4096)+1024)));
+  float4 val3 = (float4)(*((__global float4*)(data2+(gidx1*64)+(lidx2*4)+(ridx0*4096)+2048)));
+  float4 val4 = (float4)(*((__global float4*)(data2+(gidx1*64)+(lidx2*4)+(ridx0*4096)+3072)));
+  (acc0).x = (((val0).x*(val1).x)+(acc0).x);
+  (acc0).x = (((val0).y*(val2).x)+(acc0).x);
+  (acc0).x = (((val0).z*(val3).x)+(acc0).x);
+  (acc0).x = (((val0).w*(val4).x)+(acc0).x);
+  (acc0).y = (((val0).x*(val1).y)+(acc0).y);
+  (acc0).y = (((val0).y*(val2).y)+(acc0).y);
+  (acc0).y = (((val0).z*(val3).y)+(acc0).y);
+  (acc0).y = (((val0).w*(val4).y)+(acc0).y);
+  (acc0).z = (((val0).x*(val1).z)+(acc0).z);
+  (acc0).z = (((val0).y*(val2).z)+(acc0).z);
+  (acc0).z = (((val0).z*(val3).z)+(acc0).z);
+  (acc0).z = (((val0).w*(val4).z)+(acc0).z);
+  (acc0).w = (((val0).x*(val1).w)+(acc0).w);
+  (acc0).w = (((val0).y*(val2).w)+(acc0).w);
+  (acc0).w = (((val0).z*(val3).w)+(acc0).w);
+  (acc0).w = (((val0).w*(val4).w)+(acc0).w);
+}
+float4 val5 = (float4)(*((__global float4*)(data3+(gidx1*64)+(lidx2*4))));
+*((__global float4*)(data0+(gidx0*1024)+(gidx1*64)+(lidx2*4))) =
+(float4)(float4)(((acc0).x+(val5).x),((acc0).y+(val5).y),((acc0).z+(val5).z),((acc0).w+(val5).w));
+}
